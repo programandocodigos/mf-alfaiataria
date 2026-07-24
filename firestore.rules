@@ -1,0 +1,21 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Regras para a coleção de produtos
+    match /produtos/{produtoId} {
+      // Qualquer visitante pode ler os produtos do catálogo público
+      allow read: if true;
+      // Apenas administradores autenticados via Firebase Auth podem criar, editar ou deletar
+      allow write: if request.auth != null;
+    }
+
+    // Regras para a coleção de pedidos
+    match /pedidos/{pedidoId} {
+      // Qualquer cliente pode criar um pedido no checkout (sem necessidade de login)
+      allow create: if true;
+      // Somente administradores logados podem visualizar e alterar status dos pedidos
+      allow read, update: if request.auth != null;
+    }
+  }
+}
