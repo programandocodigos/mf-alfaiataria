@@ -39,7 +39,12 @@ import {
   User,
   Phone,
   MapPin,
-  FileText
+  FileText,
+  Upload,
+  UploadCloud,
+  Loader2,
+  Star,
+  Image as ImageIcon
 } from 'lucide-react';
 import {
   BarChart,
@@ -57,6 +62,10 @@ import {
 import { CATEGORIES, PRODUCTS } from '../data/products';
 import logoImg from '../assets/logo.jpg';
 
+const CLOUDINARY_CLOUD_NAME = 'xatfslhg';
+const CLOUDINARY_UPLOAD_PRESET = 'mf_alfaiataria_produtos';
+const CLOUDINARY_ENDPOINT = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
+
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('produtos'); // 'produtos' | 'pedidos' | 'dashboard' | 'senha'
@@ -72,7 +81,7 @@ export default function AdminDashboard() {
   const [orderStatusFilter, setOrderStatusFilter] = useState('todos'); // 'todos' | 'pendente' | 'confirmado' | 'cancelado'
   const [chartPeriod, setChartPeriod] = useState('semana'); // 'semana' | '3meses' | '6meses'
 
-  // Product Form Modal State
+  // Product Form Modal State  // Form State for Add / Edit
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({
@@ -86,11 +95,18 @@ export default function AdminDashboard() {
     occasion: '',
     description: '',
     sizesStr: '',
-    imageUrl: '',
+    images: [],
     badge: ''
   });
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
+
+  // Cloudinary Upload State
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+  const [manualUrlInput, setManualUrlInput] = useState('');
+  const [showManualUrl, setShowManualUrl] = useState(false);
+  const fileInputRef = React.useRef(null);
 
   // Delete Confirmation Modal State
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
@@ -171,16 +187,21 @@ export default function AdminDashboard() {
       occasion: '',
       description: '',
       sizesStr: '48 (P), 50 (M), 52 (G), 54 (GG)',
-      imageUrl: '',
+      images: [],
       badge: ''
     });
     setFormError('');
+    setUploadError('');
     setIsModalOpen(true);
   };
 
   // Open Modal for Edit Product
   const handleOpenEditModal = (product) => {
     setEditingId(product.id);
+    const existingImages = Array.isArray(product.images) && product.images.length > 0 
+      ? product.images 
+      : (product.imageUrl ? [product.imageUrl] : []);
+
     setFormData({
       name: product.name || '',
       category: product.category || 'ternos',
@@ -192,11 +213,98 @@ export default function AdminDashboard() {
       occasion: product.occasion || '',
       description: product.description || '',
       sizesStr: Array.isArray(product.sizes) ? product.sizes.join(', ') : (product.sizes || ''),
-      imageUrl: Array.isArray(product.images) ? product.images[0] : (product.imageUrl || ''),
+      images: existingImages,
       badge: product.badge || ''
     });
     setFormError('');
+    setUploadError('');
     setIsModalOpen(true);
+  };
+
+  // Cloudinary Direct REST Upload Handler
+  const handleUploadFiles = async (files) => {
+    if (!files || files.length === 0) return;
+    setUploadError('');
+    setUploadingImage(true);
+
+    const fileList = Array.from(files);
+    const validFiles = [];
+
+    for (const file of fileList) {
+      if (!file.type.startsWith('image/')) {
+        setUploadError('Por favor, selecione apenas arquivos de imagem (JPG, PNG, WEBP).');
+        setUploadingImage(false);
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) { // 5MB limit
+        setUploadError(`O arquivo "${file.name}" excede o limite de 5MB.`);
+        setUploadingImage(false);
+        return;
+      }
+      validFiles.push(file);
+    }
+
+    const uploadedUrls = [];
+
+    for (const file of validFiles) {
+      try {
+        const data = new FormData();
+        data.append('file', file);
+        data.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+
+        const response = await fetch(CLOUDINARY_ENDPOINT, {
+          method: 'POST',
+          body: data
+        });
+
+        if (!response.ok) {
+          const errJson = await response.json().catch(() => ({}));
+          throw new Error(errJson.error?.message || `Falha no upload do arquivo ${file.name}`);
+        }
+
+        const result = await response.json();
+        if (result.secure_url) {
+          uploadedUrls.push(result.secure_url);
+        }
+      } catch (err) {
+        console.error("Erro no Cloudinary upload:", err);
+        setUploadError(`Erro ao enviar foto para a nuvem: ${err.message}`);
+      }
+    }
+
+    if (uploadedUrls.length > 0) {
+      setFormData(prev => ({
+        ...prev,
+        images: [...prev.images, ...uploadedUrls]
+      }));
+    }
+
+    setUploadingImage(false);
+  };
+
+  const handleRemoveImage = (indexToRemove) => {
+    setFormData(prev => ({
+      ...prev,
+      images: prev.images.filter((_, idx) => idx !== indexToRemove)
+    }));
+  };
+
+  const handleSetAsPrimary = (indexToPrimary) => {
+    setFormData(prev => {
+      const newImages = [...prev.images];
+      const [primary] = newImages.splice(indexToPrimary, 1);
+      newImages.unshift(primary);
+      return { ...prev, images: newImages };
+    });
+  };
+
+  const handleAddManualUrl = () => {
+    if (!manualUrlInput.trim()) return;
+    setFormData(prev => ({
+      ...prev,
+      images: [...prev.images, manualUrlInput.trim()]
+    }));
+    setManualUrlInput('');
   };
 
   // Save Product (Create or Update)
@@ -204,8 +312,13 @@ export default function AdminDashboard() {
     e.preventDefault();
     setFormError('');
 
-    if (!formData.name.trim() || !formData.price || !formData.imageUrl.trim()) {
-      setFormError('Preencha os campos obrigatórios: Nome, Preço de Venda e URL da Imagem.');
+    if (!formData.name.trim() || !formData.price) {
+      setFormError('Preencha os campos obrigatórios: Nome e Preço de Venda.');
+      return;
+    }
+
+    if (!formData.images || formData.images.length === 0) {
+      setFormError('Adicione pelo menos 1 foto para o produto (via upload ou URL).');
       return;
     }
 
@@ -233,7 +346,8 @@ export default function AdminDashboard() {
         occasion: formData.occasion.trim() || 'Eventos Formais & Ocasiões Especiais',
         description: formData.description.trim() || 'Peça confeccionada com elevado padrão de alfaiataria.',
         sizes: sizesArray.length > 0 ? sizesArray : ['Tamanho Único'],
-        images: [formData.imageUrl.trim()],
+        images: formData.images,
+        imageUrl: formData.images[0], // fallback for legacy components
         badge: formData.badge.trim() || null,
         updatedAt: serverTimestamp()
       };
@@ -1286,18 +1400,151 @@ export default function AdminDashboard() {
                   />
                 </div>
 
-                <div className="sm:col-span-2">
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-300 mb-1">
-                    URL da Imagem do Produto *
-                  </label>
-                  <input
-                    type="url"
-                    required
-                    value={formData.imageUrl}
-                    onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
-                    placeholder="https://images.unsplash.com/photo-..."
-                    className="w-full bg-aurum-surface border border-aurum-border rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-aurum-gold"
-                  />
+                {/* Cloudinary Image Upload Section */}
+                <div className="sm:col-span-2 space-y-3 bg-aurum-surface/60 p-4 rounded-2xl border border-aurum-border">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-aurum-gold flex items-center gap-1.5">
+                      <UploadCloud className="w-4 h-4 text-aurum-gold" />
+                      <span>Fotos do Produto (Cloudinary) *</span>
+                    </label>
+                    <span className="text-[10px] text-gray-400">
+                      {formData.images.length} foto(s) adicionada(s)
+                    </span>
+                  </div>
+
+                  {/* Upload Error Alert */}
+                  {uploadError && (
+                    <div className="p-3 rounded-xl bg-red-950/60 border border-red-800 text-red-200 text-xs flex items-center gap-2 animate-fadeIn">
+                      <AlertTriangle className="w-4 h-4 text-red-400 flex-shrink-0" />
+                      <span>{uploadError}</span>
+                    </div>
+                  )}
+
+                  {/* Cloudinary Drag and Drop Upload Area */}
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                        handleUploadFiles(e.dataTransfer.files);
+                      }
+                    }}
+                    className={`border-2 border-dashed rounded-2xl p-6 text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-2 ${
+                      uploadingImage 
+                        ? 'border-aurum-gold bg-aurum-gold/10' 
+                        : 'border-aurum-gold/40 hover:border-aurum-gold bg-aurum-card/60 hover:bg-aurum-card'
+                    }`}
+                  >
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      multiple
+                      accept="image/jpeg,image/png,image/webp"
+                      onChange={(e) => {
+                        if (e.target.files && e.target.files.length > 0) {
+                          handleUploadFiles(e.target.files);
+                        }
+                      }}
+                      className="hidden"
+                    />
+
+                    {uploadingImage ? (
+                      <div className="flex flex-col items-center gap-2 text-aurum-gold py-2">
+                        <Loader2 className="w-8 h-8 animate-spin" />
+                        <p className="text-xs font-bold uppercase tracking-wider">Enviando foto para o Cloudinary...</p>
+                        <p className="text-[10px] text-gray-400">Aguarde a confirmação de upload</p>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="w-12 h-12 rounded-full bg-aurum-gold/10 border border-aurum-gold/30 flex items-center justify-center text-aurum-gold">
+                          <Upload className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-white">Clique ou arraste imagens aqui para fazer upload</p>
+                          <p className="text-[10px] text-gray-400 mt-0.5">Formatos aceitos: JPG, PNG, WEBP (Máximo 5MB por foto)</p>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Image Thumbnail Preview Grid */}
+                  {formData.images.length > 0 && (
+                    <div className="space-y-2 pt-2">
+                      <p className="text-[11px] text-gray-400 font-semibold uppercase tracking-wider">
+                        Pré-visualização das Fotos ({formData.images.length}):
+                      </p>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        {formData.images.map((url, idx) => (
+                          <div
+                            key={idx}
+                            className={`group relative aspect-[3/4] rounded-xl overflow-hidden border-2 bg-aurum-bg shadow-md ${
+                              idx === 0 ? 'border-aurum-gold ring-2 ring-aurum-gold/40' : 'border-aurum-border'
+                            }`}
+                          >
+                            <img src={url} alt={`Foto ${idx + 1}`} className="w-full h-full object-cover" />
+
+                            {/* Primary Cover Badge */}
+                            {idx === 0 && (
+                              <span className="absolute top-2 left-2 bg-aurum-gold text-black text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded shadow">
+                                ★ Capa
+                              </span>
+                            )}
+
+                            {/* Thumbnail Controls Overlay */}
+                            <div className="absolute inset-0 bg-black/75 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 p-2">
+                              {idx !== 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleSetAsPrimary(idx)}
+                                  className="w-full py-1 px-2 rounded bg-aurum-gold/20 hover:bg-aurum-gold border border-aurum-gold text-aurum-gold hover:text-black text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                                >
+                                  Definir Capa
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveImage(idx)}
+                                className="w-full py-1 px-2 rounded bg-red-950/80 hover:bg-red-800 border border-red-700 text-red-200 text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                              >
+                                Remover
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Secondary Option: Manual URL Input Toggle */}
+                  <div className="pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowManualUrl(!showManualUrl)}
+                      className="text-[11px] text-aurum-gold hover:underline font-semibold cursor-pointer"
+                    >
+                      {showManualUrl ? '− Ocultar campo de link manual' : '+ Adicionar foto via URL externa manual'}
+                    </button>
+
+                    {showManualUrl && (
+                      <div className="flex gap-2 mt-2">
+                        <input
+                          type="url"
+                          value={manualUrlInput}
+                          onChange={(e) => setManualUrlInput(e.target.value)}
+                          placeholder="https://images.unsplash.com/photo-..."
+                          className="flex-1 bg-aurum-surface border border-aurum-border rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-aurum-gold"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleAddManualUrl}
+                          className="px-4 py-2 rounded-xl bg-aurum-surface border border-aurum-gold/40 text-aurum-gold text-xs font-bold hover:bg-aurum-gold/10 cursor-pointer"
+                        >
+                          Adicionar Link
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div>
