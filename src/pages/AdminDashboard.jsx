@@ -265,7 +265,7 @@ export default function AdminDashboard() {
     };
   };
 
-  // Step 2: Confirm and Upload to Cloudinary with Auto Resizing (max 1200px, q_auto, f_auto)
+  // Step 2: Confirm and Upload to Cloudinary (Unsigned Upload)
   const handleConfirmUpload = async () => {
     if (!pendingImage || !pendingImage.file) return;
 
@@ -276,7 +276,6 @@ export default function AdminDashboard() {
       const data = new FormData();
       data.append('file', pendingImage.file);
       data.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-      data.append('transformation', 'c_limit,w_1200,q_auto,f_auto');
 
       const response = await fetch(CLOUDINARY_ENDPOINT, {
         method: 'POST',
@@ -290,17 +289,12 @@ export default function AdminDashboard() {
 
       const result = await response.json();
       if (result.secure_url) {
-        let finalUrl = result.secure_url;
-        if (finalUrl.includes('/upload/') && !finalUrl.includes('/c_limit,')) {
-          finalUrl = finalUrl.replace('/upload/', '/upload/c_limit,w_1200,q_auto,f_auto/');
-        }
-
         setFormData(prev => ({
           ...prev,
-          images: [...prev.images, finalUrl]
+          images: [...prev.images, result.secure_url]
         }));
 
-        setUploadSuccessMsg('✓ Foto enviada, otimizada e confirmada com sucesso!');
+        setUploadSuccessMsg('✓ Foto enviada e salva com sucesso!');
         setTimeout(() => setUploadSuccessMsg(''), 4000);
         handleCancelPendingImage();
       }
@@ -1527,7 +1521,7 @@ export default function AdminDashboard() {
                           </div>
 
                           <div className="p-2.5 bg-aurum-gold/10 rounded-xl border border-aurum-gold/20 text-[11px] text-aurum-gold-champagne leading-relaxed">
-                            💡 <strong>Otimização Automática Cloudinary:</strong> Ao confirmar, a imagem será redimensionada para no máximo 1200px de largura mantendo a proporção original e comprimida com máxima qualidade (q_auto).
+                            💡 <strong>Processamento Cloudinary:</strong> Ao confirmar, a imagem será processada e salva no Cloudinary usando o preset de upload da loja.
                           </div>
 
                           {/* Action Buttons */}
