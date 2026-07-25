@@ -143,7 +143,10 @@ export default function LookBuilder({ currentProduct }) {
             <div
               key={product.id || product.name}
               className="group relative bg-aurum-card rounded-xl overflow-hidden border border-aurum-border hover:border-aurum-gold/60 transition-all duration-300 cursor-pointer flex flex-col justify-between snap-start hover:-translate-y-1 shadow-md"
-              onClick={() => setSelectedProductDetail(product)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setSelectedProductDetail(product);
+              }}
             >
               {/* Product Image */}
               <div className="aspect-[3/4] w-full overflow-hidden relative bg-aurum-bg">
