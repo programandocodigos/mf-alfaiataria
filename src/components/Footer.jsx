@@ -133,7 +133,9 @@ export default function Footer({ onSelectCategory }) {
           <ul className="space-y-2.5">
             <li className="flex items-center gap-2">
               <Phone className="w-4 h-4 text-aurum-gold" />
-              <span>(11) 99999-9999</span>
+              <a href="https://wa.me/5511963497168" target="_blank" rel="noreferrer" className="hover:text-aurum-gold transition-colors">
+                (11) 96349-7168
+              </a>
             </li>
             <li className="flex items-center gap-2">
               <Mail className="w-4 h-4 text-aurum-gold" />

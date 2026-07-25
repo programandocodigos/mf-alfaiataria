@@ -103,7 +103,7 @@ export default function FitFinderModal() {
           </div>
           <div>
             <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-aurum-gold/10 border border-aurum-gold/30 text-aurum-gold text-[10px] font-bold uppercase tracking-wider mb-1">
-              <Sparkles className="w-3 h-3" /> Provador Virtual Sartorial
+              <Sparkles className="w-3 h-3" /> Fit Finder Sartorial
             </div>
             <h2 className="font-serif text-2xl font-bold text-white">Descubra seu Tamanho Ideal</h2>
           </div>
@@ -254,7 +254,7 @@ export default function FitFinderModal() {
           <div className="space-y-6 animate-fadeIn">
             <div className="bg-aurum-card p-6 rounded-lg border border-aurum-gold/40 shadow-gold-sm text-center space-y-4">
               <span className="text-xs font-bold text-aurum-gold uppercase tracking-widest block">
-                Resultado do Provador Virtual
+                Recomendação de Medidas Fit Finder
               </span>
 
               <div className="grid grid-cols-3 gap-3 py-2 border-y border-aurum-border/60">

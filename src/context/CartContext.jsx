@@ -19,7 +19,6 @@ export const CartProvider = ({ children }) => {
   const [isSizeGuideOpen, setIsSizeGuideOpen] = useState(false);
   const [isFitFinderOpen, setIsFitFinderOpen] = useState(false);
   const [isImageSearchOpen, setIsImageSearchOpen] = useState(false);
-  const [isVirtualTryOnOpen, setIsVirtualTryOnOpen] = useState(false);
   const [selectedProductDetail, setSelectedProductDetail] = useState(null);
 
   // Bot Suggestions — products curated by the chatbot
@@ -124,8 +123,6 @@ export const CartProvider = ({ children }) => {
       setIsFitFinderOpen,
       isImageSearchOpen,
       setIsImageSearchOpen,
-      isVirtualTryOnOpen,
-      setIsVirtualTryOnOpen,
       botSuggestions,
       setBotSuggestions,
       selectedProductDetail,

@@ -14,7 +14,6 @@ import CheckoutModal from './components/CheckoutModal';
 import SizeGuideModal from './components/SizeGuideModal';
 import FitFinderModal from './components/FitFinderModal';
 import ImageSearchModal from './components/ImageSearchModal';
-import VirtualTryOnModal from './components/VirtualTryOnModal';
 import RecommendedProducts from './components/RecommendedProducts';
 import NotificationToast from './components/NotificationToast';
 import InstagramFloatButton from './components/InstagramFloatButton';
@@ -36,7 +35,6 @@ function PublicStore() {
 
   const {
     isImageSearchOpen, setIsImageSearchOpen,
-    isVirtualTryOnOpen, setIsVirtualTryOnOpen,
     botSuggestions,
   } = useCart();
 
@@ -180,7 +178,6 @@ function PublicStore() {
       <SizeGuideModal />
       <FitFinderModal />
       <ImageSearchModal isOpen={isImageSearchOpen} onClose={() => setIsImageSearchOpen(false)} />
-      <VirtualTryOnModal isOpen={isVirtualTryOnOpen} onClose={() => setIsVirtualTryOnOpen(false)} />
       <NotificationToast />
 
       {/* Floating Action Buttons */}

@@ -57,7 +57,7 @@ export default function Hero({ onExploreClick }) {
             className="w-full sm:w-auto px-8 py-4 rounded-md bg-gradient-to-r from-aurum-gold/20 to-aurum-surface/90 hover:from-aurum-gold/30 border border-aurum-gold/50 text-aurum-gold-light font-semibold tracking-wider uppercase text-xs flex items-center justify-center gap-2 transition-all duration-300 backdrop-blur-md hover:border-aurum-gold shadow-gold-sm"
           >
             <UserCheck className="w-4 h-4 text-aurum-gold" />
-            <span>Provador Virtual</span>
+            <span>Fit Finder (Medidas)</span>
             <Sparkles className="w-3.5 h-3.5 text-aurum-gold" />
           </button>
 

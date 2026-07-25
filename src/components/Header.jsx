@@ -5,7 +5,7 @@ import { CATEGORIES } from '../data/products';
 import logoImg from '../assets/logo.jpg';
 
 export default function Header({ selectedCategory, onSelectCategory, searchQuery, onSearchChange }) {
-  const { cartTotalCount, setIsCartOpen, setIsFitFinderOpen, setIsImageSearchOpen, setIsVirtualTryOnOpen } = useCart();
+  const { cartTotalCount, setIsCartOpen, setIsFitFinderOpen, setIsImageSearchOpen } = useCart();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
 
@@ -36,15 +36,8 @@ export default function Header({ selectedCategory, onSelectCategory, searchQuery
               <Camera className="w-3.5 h-3.5" />
               <span>Busca por Imagem</span>
             </button>
-            <button 
-              onClick={() => setIsVirtualTryOnOpen(true)} 
-              className="hover:text-aurum-gold transition-colors flex items-center gap-1"
-            >
-              <UserCheck className="w-3.5 h-3.5" />
-              <span>Provador Virtual</span>
-            </button>
-            <a href="https://wa.me/5511999999999" target="_blank" rel="noreferrer" className="hover:text-aurum-gold transition-colors flex items-center gap-1">
-              <PhoneCall className="w-3 h-3" />
+            <a href="https://wa.me/5511963497168" target="_blank" rel="noreferrer" className="hover:text-aurum-gold transition-colors flex items-center gap-1">
+              <PhoneCall className="w-3 h-3 text-aurum-gold" />
               <span>Atendimento Privativo</span>
             </a>
           </div>
