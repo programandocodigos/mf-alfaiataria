@@ -104,6 +104,8 @@ export default function AdminDashboard() {
   // Cloudinary Upload State
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadError, setUploadError] = useState('');
+  const [uploadSuccessMsg, setUploadSuccessMsg] = useState('');
+  const [pendingImage, setPendingImage] = useState(null); // { file, previewUrl, name, sizeFormatted, width, height, format }
   const [manualUrlInput, setManualUrlInput] = useState('');
   const [showManualUrl, setShowManualUrl] = useState(false);
   const fileInputRef = React.useRef(null);
@@ -192,6 +194,8 @@ export default function AdminDashboard() {
     });
     setFormError('');
     setUploadError('');
+    setUploadSuccessMsg('');
+    setPendingImage(null);
     setIsModalOpen(true);
   };
 
@@ -218,68 +222,104 @@ export default function AdminDashboard() {
     });
     setFormError('');
     setUploadError('');
+    setUploadSuccessMsg('');
+    setPendingImage(null);
     setIsModalOpen(true);
   };
 
-  // Cloudinary Direct REST Upload Handler
-  const handleUploadFiles = async (files) => {
-    if (!files || files.length === 0) return;
+  // Step 1: Handle File Selection & Inspect Dimensions/Info before Upload
+  const handleSelectFileForReview = (file) => {
+    if (!file) return;
+    setUploadError('');
+    setUploadSuccessMsg('');
+
+    if (!file.type.startsWith('image/')) {
+      setUploadError('Por favor, selecione apenas arquivos de imagem (JPG, PNG, WEBP).');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) { // 5MB limit
+      setUploadError(`O arquivo "${file.name}" excede o tamanho máximo permitido de 5MB.`);
+      return;
+    }
+
+    const previewUrl = URL.createObjectURL(file);
+    const img = new Image();
+    img.src = previewUrl;
+
+    img.onload = () => {
+      const sizeMb = file.size / (1024 * 1024);
+      const sizeKb = Math.round(file.size / 1024);
+      const sizeFormatted = sizeMb >= 1 ? `${sizeMb.toFixed(2)} MB` : `${sizeKb} KB`;
+      const format = file.type.split('/')[1]?.toUpperCase() || 'IMAGEM';
+
+      setPendingImage({
+        file,
+        previewUrl,
+        name: file.name,
+        sizeFormatted,
+        width: img.naturalWidth,
+        height: img.naturalHeight,
+        format
+      });
+    };
+  };
+
+  // Step 2: Confirm and Upload to Cloudinary with Auto Resizing (max 1200px, q_auto, f_auto)
+  const handleConfirmUpload = async () => {
+    if (!pendingImage || !pendingImage.file) return;
+
     setUploadError('');
     setUploadingImage(true);
 
-    const fileList = Array.from(files);
-    const validFiles = [];
+    try {
+      const data = new FormData();
+      data.append('file', pendingImage.file);
+      data.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+      data.append('transformation', 'c_limit,w_1200,q_auto,f_auto');
 
-    for (const file of fileList) {
-      if (!file.type.startsWith('image/')) {
-        setUploadError('Por favor, selecione apenas arquivos de imagem (JPG, PNG, WEBP).');
-        setUploadingImage(false);
-        return;
+      const response = await fetch(CLOUDINARY_ENDPOINT, {
+        method: 'POST',
+        body: data
+      });
+
+      if (!response.ok) {
+        const errJson = await response.json().catch(() => ({}));
+        throw new Error(errJson.error?.message || `Falha no upload do arquivo ${pendingImage.name}`);
       }
-      if (file.size > 5 * 1024 * 1024) { // 5MB limit
-        setUploadError(`O arquivo "${file.name}" excede o limite de 5MB.`);
-        setUploadingImage(false);
-        return;
-      }
-      validFiles.push(file);
-    }
 
-    const uploadedUrls = [];
-
-    for (const file of validFiles) {
-      try {
-        const data = new FormData();
-        data.append('file', file);
-        data.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-
-        const response = await fetch(CLOUDINARY_ENDPOINT, {
-          method: 'POST',
-          body: data
-        });
-
-        if (!response.ok) {
-          const errJson = await response.json().catch(() => ({}));
-          throw new Error(errJson.error?.message || `Falha no upload do arquivo ${file.name}`);
+      const result = await response.json();
+      if (result.secure_url) {
+        let finalUrl = result.secure_url;
+        if (finalUrl.includes('/upload/') && !finalUrl.includes('/c_limit,')) {
+          finalUrl = finalUrl.replace('/upload/', '/upload/c_limit,w_1200,q_auto,f_auto/');
         }
 
-        const result = await response.json();
-        if (result.secure_url) {
-          uploadedUrls.push(result.secure_url);
-        }
-      } catch (err) {
-        console.error("Erro no Cloudinary upload:", err);
-        setUploadError(`Erro ao enviar foto para a nuvem: ${err.message}`);
+        setFormData(prev => ({
+          ...prev,
+          images: [...prev.images, finalUrl]
+        }));
+
+        setUploadSuccessMsg('✓ Foto enviada, otimizada e confirmada com sucesso!');
+        setTimeout(() => setUploadSuccessMsg(''), 4000);
+        handleCancelPendingImage();
       }
+    } catch (err) {
+      console.error("Erro no Cloudinary upload:", err);
+      setUploadError(`Erro ao enviar foto: ${err.message}`);
+    } finally {
+      setUploadingImage(false);
     }
+  };
 
-    if (uploadedUrls.length > 0) {
-      setFormData(prev => ({
-        ...prev,
-        images: [...prev.images, ...uploadedUrls]
-      }));
+  const handleCancelPendingImage = () => {
+    if (pendingImage?.previewUrl) {
+      URL.revokeObjectURL(pendingImage.previewUrl);
     }
-
-    setUploadingImage(false);
+    setPendingImage(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
   };
 
   const handleRemoveImage = (indexToRemove) => {
@@ -1408,7 +1448,7 @@ export default function AdminDashboard() {
                       <span>Fotos do Produto (Cloudinary) *</span>
                     </label>
                     <span className="text-[10px] text-gray-400">
-                      {formData.images.length} foto(s) adicionada(s)
+                      {formData.images.length} foto(s) salvas no produto
                     </span>
                   </div>
 
@@ -1420,53 +1460,131 @@ export default function AdminDashboard() {
                     </div>
                   )}
 
-                  {/* Cloudinary Drag and Drop Upload Area */}
-                  <div
-                    onClick={() => fileInputRef.current?.click()}
-                    onDragOver={(e) => e.preventDefault()}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-                        handleUploadFiles(e.dataTransfer.files);
+                  {/* Upload Success Alert */}
+                  {uploadSuccessMsg && (
+                    <div className="p-3 rounded-xl bg-emerald-950/80 border border-emerald-800 text-emerald-200 text-xs flex items-center gap-2 animate-fadeIn">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                      <span className="font-semibold">{uploadSuccessMsg}</span>
+                    </div>
+                  )}
+
+                  {/* Hidden File Input */}
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files[0]) {
+                        handleSelectFileForReview(e.target.files[0]);
                       }
                     }}
-                    className={`border-2 border-dashed rounded-2xl p-6 text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-2 ${
-                      uploadingImage 
-                        ? 'border-aurum-gold bg-aurum-gold/10' 
-                        : 'border-aurum-gold/40 hover:border-aurum-gold bg-aurum-card/60 hover:bg-aurum-card'
-                    }`}
-                  >
-                    <input
-                      type="file"
-                      ref={fileInputRef}
-                      multiple
-                      accept="image/jpeg,image/png,image/webp"
-                      onChange={(e) => {
-                        if (e.target.files && e.target.files.length > 0) {
-                          handleUploadFiles(e.target.files);
+                    className="hidden"
+                  />
+
+                  {/* STAGE 1: Pre-Upload Review Card (If file selected, before uploading to Cloudinary) */}
+                  {pendingImage ? (
+                    <div className="bg-aurum-card border-2 border-aurum-gold/60 rounded-2xl p-4 space-y-4 animate-fadeIn shadow-gold-sm">
+                      <div className="flex items-center justify-between border-b border-aurum-border/60 pb-2">
+                        <span className="text-xs font-bold text-aurum-gold uppercase tracking-wider flex items-center gap-1.5">
+                          <ImageIcon className="w-4 h-4 text-aurum-gold" />
+                          <span>Revisar Foto Selecionada (Pré-Upload)</span>
+                        </span>
+                        <span className="text-[10px] text-aurum-gold bg-aurum-gold/10 px-2 py-0.5 rounded border border-aurum-gold/30">
+                          Aguardando Confirmação
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-center">
+                        {/* Large Image Preview */}
+                        <div className="relative aspect-[3/4] rounded-xl overflow-hidden bg-black border border-aurum-gold/40 shadow-md">
+                          <img 
+                            src={pendingImage.previewUrl} 
+                            alt="Preview" 
+                            className="w-full h-full object-cover" 
+                          />
+                        </div>
+
+                        {/* File Details Info */}
+                        <div className="sm:col-span-2 space-y-2.5 text-xs">
+                          <div className="bg-aurum-surface/80 p-2.5 rounded-xl border border-aurum-border/60">
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Nome do Arquivo:</span>
+                            <span className="font-semibold text-white truncate block mt-0.5">{pendingImage.name}</span>
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-2">
+                            <div className="bg-aurum-surface/80 p-2 rounded-xl border border-aurum-border/60 text-center">
+                              <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Dimensões</span>
+                              <span className="font-bold text-aurum-gold text-xs">{pendingImage.width} × {pendingImage.height}</span>
+                            </div>
+                            <div className="bg-aurum-surface/80 p-2 rounded-xl border border-aurum-border/60 text-center">
+                              <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Tamanho</span>
+                              <span className="font-bold text-white text-xs">{pendingImage.sizeFormatted}</span>
+                            </div>
+                            <div className="bg-aurum-surface/80 p-2 rounded-xl border border-aurum-border/60 text-center">
+                              <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block">Formato</span>
+                              <span className="font-bold text-white text-xs">{pendingImage.format}</span>
+                            </div>
+                          </div>
+
+                          <div className="p-2.5 bg-aurum-gold/10 rounded-xl border border-aurum-gold/20 text-[11px] text-aurum-gold-champagne leading-relaxed">
+                            💡 <strong>Otimização Automática Cloudinary:</strong> Ao confirmar, a imagem será redimensionada para no máximo 1200px de largura mantendo a proporção original e comprimida com máxima qualidade (q_auto).
+                          </div>
+
+                          {/* Action Buttons */}
+                          <div className="flex items-center gap-2 pt-2">
+                            <button
+                              type="button"
+                              onClick={handleConfirmUpload}
+                              disabled={uploadingImage}
+                              className="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-aurum-gold-dark via-aurum-gold to-aurum-gold-light text-black font-bold uppercase tracking-wider text-xs flex items-center justify-center gap-2 shadow-gold-sm hover:brightness-110 active:scale-95 transition-all disabled:opacity-50 cursor-pointer"
+                            >
+                              {uploadingImage ? (
+                                <>
+                                  <Loader2 className="w-4 h-4 animate-spin text-black" />
+                                  <span>Enviando & Otimizando...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Check className="w-4 h-4 stroke-[3]" />
+                                  <span>Usar Esta Foto</span>
+                                </>
+                              )}
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={handleCancelPendingImage}
+                              disabled={uploadingImage}
+                              className="py-2.5 px-4 rounded-xl bg-aurum-surface border border-aurum-border hover:border-aurum-gold text-xs text-gray-300 hover:text-white transition-colors disabled:opacity-50 cursor-pointer"
+                            >
+                              Escolher Outra
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    /* STAGE 0: Drag and Drop Selector Dropzone */
+                    <div
+                      onClick={() => fileInputRef.current?.click()}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                          handleSelectFileForReview(e.dataTransfer.files[0]);
                         }
                       }}
-                      className="hidden"
-                    />
-
-                    {uploadingImage ? (
-                      <div className="flex flex-col items-center gap-2 text-aurum-gold py-2">
-                        <Loader2 className="w-8 h-8 animate-spin" />
-                        <p className="text-xs font-bold uppercase tracking-wider">Enviando foto para o Cloudinary...</p>
-                        <p className="text-[10px] text-gray-400">Aguarde a confirmação de upload</p>
+                      className="border-2 border-dashed border-aurum-gold/40 hover:border-aurum-gold rounded-2xl p-6 text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-2 bg-aurum-card/60 hover:bg-aurum-card"
+                    >
+                      <div className="w-12 h-12 rounded-full bg-aurum-gold/10 border border-aurum-gold/30 flex items-center justify-center text-aurum-gold">
+                        <Upload className="w-6 h-6" />
                       </div>
-                    ) : (
-                      <>
-                        <div className="w-12 h-12 rounded-full bg-aurum-gold/10 border border-aurum-gold/30 flex items-center justify-center text-aurum-gold">
-                          <Upload className="w-6 h-6" />
-                        </div>
-                        <div>
-                          <p className="text-xs font-bold text-white">Clique ou arraste imagens aqui para fazer upload</p>
-                          <p className="text-[10px] text-gray-400 mt-0.5">Formatos aceitos: JPG, PNG, WEBP (Máximo 5MB por foto)</p>
-                        </div>
-                      </>
-                    )}
-                  </div>
+                      <div>
+                        <p className="text-xs font-bold text-white">Clique ou arraste uma foto aqui para revisar antes de enviar</p>
+                        <p className="text-[10px] text-gray-400 mt-0.5">Formatos aceitos: JPG, PNG, WEBP (Máximo 5MB por foto)</p>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Image Thumbnail Preview Grid */}
                   {formData.images.length > 0 && (
